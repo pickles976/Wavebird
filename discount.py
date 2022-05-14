@@ -1,12 +1,17 @@
 import pandas as pd
 import pandas_datareader as wb
 import numpy as np
+import time
 
 # Functions used to get the discount rate for FCFE
 # COE aka Cost of Equity
 
 # get beta for a given stock vs a broader index (SPY/DJIA/NASDAQ)
+# very slow since it is getting both historical stock prices for
+# the ticker and the index
 def getBeta(ticker,indexFund,start,end):
+
+    t = time.time()
 
     # scrape time-series data from yahoo
     aapl = wb.DataReader(ticker, 'yahoo', start, end)
@@ -30,12 +35,10 @@ def getBeta(ticker,indexFund,start,end):
     for idx,row in both.iterrows():
 
         if idx - 1 in both.index:
-            # current debt - previous debt
+            # get price diffs
             both[tickIdx][idx] = (both[ticker][idx] - both[ticker][idx - 1]) / both[ticker][idx] * 100
-            # current debt - previous debt
+            # get price diffs
             both[indexIdx][idx] = (both[indexFund][idx] - both[indexFund][idx - 1]) / both[indexFund][idx] * 100
-        
-    # print(both)
 
     # making series from list a
     a = both[tickIdx]
@@ -47,6 +50,8 @@ def getBeta(ticker,indexFund,start,end):
     covar = a.cov(b)
     var = b.var()
     beta = covar/var
+
+    print(f"Retrieving beta took: {time.time() - t}s")
 
     return beta
 
@@ -66,17 +71,24 @@ def getCOECurrent(ticker,indexFund,start,end,erp):
     rfr = getRFR(start,end)
     return rfr + (beta * erp)
 
+def getERP(year):
+
+    df = pd.read_csv("HistoricalRates.csv")
+
+    erp = df["Implied ERP (FCFE)"][df["Year"] == year].values[0]
+    erp = float(erp.replace("%",""))
+    return erp
+
+
 # Get Cost of Equity for a stock given historical data
 # of bond yields, erp, and index fund performance
 def getCOEHistorical(ticker,indexFund,start,end):
 
     year = int(start.split("-")[0])
 
-    df = pd.read_csv("HistoricalRates.csv")
+    erp = getERP(year)
 
-    # Get the implied ERP from historical data
-    erp = df["Implied ERP (FCFE)"][df["Year"] == year].values[0]
-    erp = float(erp.replace("%",""))
+    df = pd.read_csv("HistoricalRates.csv")
 
     # Get the RFR 10-Y from historical data
     rfr = df["T.Bond Rate"][df["Year"] == year].values[0]
@@ -85,10 +97,3 @@ def getCOEHistorical(ticker,indexFund,start,end):
     # get beta from Yahoo
     beta = getBeta(ticker,indexFund,start,end)
     return rfr + (beta * erp)
-
-
-coe = getCOECurrent("AAPL","SPY","2022-04-14","2022-05-14",5.23)
-print(coe)
-
-coe = getCOEHistorical("AAPL","SPY","2021-04-14","2021-05-14")
-print(coe)

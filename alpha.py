@@ -1,67 +1,138 @@
 import requests,json
 import pandas as pd
 import numpy as np
+from discount import getCOEHistorical, getERP, getCOECurrent
+import time
 
-key = "SJI9YTPAA1KTKCDP"
-ticker = "AAPL"
-metric = "CASH_FLOW"
+key = ""
 
-# replace the "demo" apikey below with your own key from https://www.alphavantage.co/support/#api-key
-url = f'https://www.alphavantage.co/query?function={metric}&symbol={ticker}&apikey={key}'
-r = requests.get(url)
-data = r.json()
+with open("key.txt","r") as file:
+    key = file.read()
 
-annualReports = data["annualReports"]
-metric = "BALANCE_SHEET"
+# Return historical FCFEs for a ticker
+# Free Cash Flow from Equity
+def getFCFE(ticker):
 
-url = f'https://www.alphavantage.co/query?function={metric}&symbol={ticker}&apikey={key}'
-r = requests.get(url)
-data = r.json()
+    metric = "CASH_FLOW"
 
-for i in range(0,len(annualReports)):
+    # replace the "demo" apikey below with your own key from https://www.alphavantage.co/support/#api-key
+    url = f'https://www.alphavantage.co/query?function={metric}&symbol={ticker}&apikey={key}'
+    r = requests.get(url)
+    data = r.json()
 
-    tempAnnualReports = data["annualReports"]
+    annualReports = data["annualReports"]
+    metric = "BALANCE_SHEET"
 
-    if annualReports[i]["fiscalDateEnding"] == tempAnnualReports[i]["fiscalDateEnding"]:
-        annualReports[i] = {**annualReports[i],**tempAnnualReports[i]}
+    url = f'https://www.alphavantage.co/query?function={metric}&symbol={ticker}&apikey={key}'
+    r = requests.get(url)
+    data = r.json()
+
+    for i in range(0,len(annualReports)):
+
+        tempAnnualReports = data["annualReports"]
+
+        if annualReports[i]["fiscalDateEnding"] == tempAnnualReports[i]["fiscalDateEnding"]:
+            annualReports[i] = {**annualReports[i],**tempAnnualReports[i]}
+
+    table = {}
+
+    for entry in annualReports:
+
+        divPayout = 0
+        if entry["dividendPayout"] != "None":
+            divPayout = int(entry["dividendPayout"])
+
+        date = int(entry["fiscalDateEnding"].split("-")[0])
+        newEntry = {"netIncome": int(entry["netIncome"]), 
+        "dividendPayout": divPayout,
+        "capitalExpenditures": int(entry["capitalExpenditures"]), 
+        "workingCapital": int(entry["totalCurrentAssets"]) - int(entry["totalCurrentLiabilities"]),
+        "debt": int(entry["shortLongTermDebtTotal"]),
+        "shares": int(entry["commonStockSharesOutstanding"])}
+        table[date] = newEntry
+
+    df = pd.DataFrame.from_dict(table,orient="index")
+    df["deltaWorkingCapital"] = np.nan
+    df["debtIssued"] = np.nan
+    df["FCFE"] = np.nan
+
+    prev = ""
+
+    # get new debt
+    for idx,row in df.iterrows():
+
+        if idx - 1 in df.index:
+            # current debt - previous debt
+            df["debtIssued"][idx] = df["debt"][idx] - df["debt"][idx - 1] 
+
+            # current working capital - previous working capital
+            df["deltaWorkingCapital"][idx] = df["workingCapital"][idx] - df["workingCapital"][idx - 1] 
+
+    df["FCFE"] = df["netIncome"] + df["dividendPayout"] - df["capitalExpenditures"] - df["deltaWorkingCapital"] + df["debtIssued"]
+
+    newdf = pd.DataFrame()
+    newdf["FCFE"] = df["FCFE"]
+    newdf["shares"] = df["shares"]
+    return newdf
+
+# formula for actually calculating a DCF estimate
+def getDCF(fcfe,coe,erp,yearsGrowth):
+
+    total = 0
+    # print(fcfe,coe,erp)
+
+    for i in range(yearsGrowth):
+        discount = (1 + coe) ** i
+        total += fcfe / discount
+
+    terminal = fcfe / erp
+
+    total += terminal
+
+    return float(total)
 
 
-table = {}
+# returns a trend of historical DCF's for a given stock
+def getDCFArray(ticker,yearsGrowth):
 
-for entry in annualReports:
+    fcfeData = getFCFE(ticker)
 
-    date = int(entry["fiscalDateEnding"].split("-")[0])
-    newEntry = {"netIncome": int(entry["netIncome"]), 
-    "capitalExpenditures": int(entry["capitalExpenditures"]), 
-    "workingCapital": int(entry["totalCurrentAssets"]) - int(entry["totalCurrentLiabilities"]),
-    "debt": int(entry["shortLongTermDebtTotal"])}
-    table[date] = newEntry
+    dcfData = pd.DataFrame() 
+    dcfData.index = fcfeData.index
+    dcfData["dcf"] = np.nan
+    dcfData["FairValue"] = np.nan
 
-df = pd.DataFrame.from_dict(table,orient="index")
-df["deltaWorkingCapital"] = np.nan
-df["debtIssued"] = np.nan
-df["FCFE"] = np.nan
+    # get DCF for each year
+    for (idx,value) in fcfeData.iterrows():
+        start = f"{idx-1}-01-01"
+        end = f"{idx}-12-31"
+        fcfe = value["FCFE"]
+        shares = value["shares"]
 
-prev = ""
+        try:
 
-# get new debt
-for idx,row in df.iterrows():
+            coe = getCOEHistorical(ticker,"SPY",start,end)/100.0
+            erp = getERP(idx)/100.0
 
-    if idx - 1 in df.index:
-        # current debt - previous debt
-        df["debtIssued"][idx] = df["debt"][idx] - df["debt"][idx - 1] 
+            dcf = getDCF(fcfe,coe,erp,yearsGrowth)
+            dcfData["dcf"][idx] = dcf
+            dcfData["FairValue"][idx] = dcf/shares
 
-        # current working capital - previous working capital
-        df["deltaWorkingCapital"][idx] = df["workingCapital"][idx] - df["workingCapital"][idx - 1] 
+        except:
+            print(f"Failed for year {idx}, trying with fresh data")
 
-df["FCFE"] = df["netIncome"] - df["capitalExpenditures"] - df["deltaWorkingCapital"] + df["debtIssued"]
+            try:
+                erp = 5.23
+                coe = getCOECurrent(ticker,"SPY",start,end,erp)/100.0
+                dcf = getDCF(fcfe,coe,erp,yearsGrowth)
+                dcfData["dcf"][idx] = dcf
+                dcfData["FairValue"][idx] = dcf/shares
+            except:
+                print("Failed with fresh data")
 
-print(df)
+    return dcfData
 
-# df["debtIssued"] = df[]
-
-# print(df)
-
-
-# with open("table.json","w") as file:
-#     file.write(json.dumps(annualReports[0]))
+t = time.time()
+dcfs =  getDCFArray("GOOG",5)
+print(f"Elapsed time: {time.time() - t}s")
+print(dcfs)
