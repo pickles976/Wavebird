@@ -55,7 +55,7 @@ def getBeta(ticker,indexFund,start,end):
 
     return beta
 
-# Get the most recent risk-free rate from 10-Year TBills
+# Get the most recent risk-free rate from 10-Year Bonds
 def getRFR(start,end):
 
     tenyear = wb.DataReader("^TNX", 'yahoo', start, end)

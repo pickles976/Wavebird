@@ -2,7 +2,6 @@ import requests,json
 import pandas as pd
 import numpy as np
 from discount import getCOEHistorical, getERP, getCOECurrent
-import time
 
 key = ""
 
@@ -27,6 +26,7 @@ def getFCFE(ticker):
     r = requests.get(url)
     data = r.json()
 
+    # combine CASH FLOW data with BALANCE SHEET data
     for i in range(0,len(annualReports)):
 
         tempAnnualReports = data["annualReports"]
@@ -36,18 +36,23 @@ def getFCFE(ticker):
 
     table = {}
 
+    # Extract data for every annual report
     for entry in annualReports:
 
         divPayout = 0
         if entry["dividendPayout"] != "None":
             divPayout = int(entry["dividendPayout"])
 
+        debt = 0 
+        if entry["shortLongTermDebtTotal"] != "None":
+            debt = int(entry["shortLongTermDebtTotal"])
+
         date = int(entry["fiscalDateEnding"].split("-")[0])
         newEntry = {"netIncome": int(entry["netIncome"]), 
         "dividendPayout": divPayout,
         "capitalExpenditures": int(entry["capitalExpenditures"]), 
         "workingCapital": int(entry["totalCurrentAssets"]) - int(entry["totalCurrentLiabilities"]),
-        "debt": int(entry["shortLongTermDebtTotal"]),
+        "debt": debt,
         "shares": int(entry["commonStockSharesOutstanding"])}
         table[date] = newEntry
 
@@ -131,8 +136,3 @@ def getDCFArray(ticker,yearsGrowth):
                 print("Failed with fresh data")
 
     return dcfData
-
-t = time.time()
-dcfs =  getDCFArray("GOOG",5)
-print(f"Elapsed time: {time.time() - t}s")
-print(dcfs)
