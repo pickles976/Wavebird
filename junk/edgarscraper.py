@@ -107,6 +107,17 @@ for table in tables:
     tables_dict[i] = df.to_dict(orient='records')
     i += 1
 
-    if "Fiscal Year Ended" in df.values and "Net revenues:" in df.values:
-        print(df)
-        # print(df.loc[1,:])
+    assets = None
+    liabilities = None
+
+    if "Total Assets" in df.values or "TOTAL ASSETS" in df.values:
+        assets = df.loc[df[0] == "TOTAL ASSETS"]
+
+    if "Total liabilities" in df.values:
+        liabilities = df.loc[df[0] == "Total liabilities"]
+
+    if len(assets) == len(liabilities):
+        total = assets - liabilities
+        print(total)
+
+
