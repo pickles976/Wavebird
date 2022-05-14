@@ -1,4 +1,4 @@
-import requests,json
+import requests,json,datetime
 import pandas as pd
 import numpy as np
 from discount import getCOEHistorical, getERP, getCOECurrent
@@ -134,5 +134,16 @@ def getDCFArray(ticker,yearsGrowth):
                 dcfData["FairValue"][idx] = dcf/shares
             except:
                 print("Failed with fresh data")
+
+    dcfData.index = [f"{i}-04-01" for i in fcfeData.index]
+
+    dates = []
+    for (idx,value) in dcfData.iterrows():
+
+        # format
+        format = '%Y-%m-%d'
+        # convert from string format to datetime format
+        dates.append(datetime.datetime.strptime(idx, format))
+    dcfData.index = dates
 
     return dcfData
