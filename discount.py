@@ -5,6 +5,7 @@ import time
 
 # Functions used to get the discount rate for FCFE
 # COE aka Cost of Equity
+# ERP: https://pages.stern.nyu.edu/~adamodar/New_Home_Page/home.htm
 
 # get beta for a given stock vs a broader index (SPY/DJIA/NASDAQ)
 # very slow since it is getting both historical stock prices for
@@ -21,7 +22,7 @@ def getBeta(ticker,indexFund,start,end):
     tickIdx = f"{ticker}%"
     indexIdx = f"{indexFund}%"
 
-    # create and popualte dataframe
+    # create and populate dataframe
     both = pd.DataFrame()
     both[ticker] = aapl["Close"]
     both[tickIdx] = np.nan
@@ -61,16 +62,8 @@ def getRFR(start,end):
     tenyear = wb.DataReader("^TNX", 'yahoo', start, end)
     rfr = tenyear["Close"][-1]
     return rfr
-    
-# Get Cost of Equity for a stock against an index fund
-# given a start date, end date, and ERP estimate
-# ERP: https://pages.stern.nyu.edu/~adamodar/New_Home_Page/home.htm
-def getCOECurrent(ticker,indexFund,start,end,erp):
 
-    beta = getBeta(ticker,indexFund,start,end)
-    rfr = getRFR(start,end)
-    return rfr + (beta * erp)
-
+# get the Equity Risk Premium from historical data
 def getERP(year):
 
     df = pd.read_csv("HistoricalRates.csv")
@@ -79,6 +72,15 @@ def getERP(year):
     erp = float(erp.replace("%",""))
     return erp
 
+# COE = risk-free-rate + (beta * equity-risk premium)
+
+# Get Cost of Equity for a stock against an index fund
+# given a start date, end date, and ERP estimate
+def getCOECurrent(ticker,indexFund,start,end,erp):
+
+    beta = getBeta(ticker,indexFund,start,end)
+    rfr = getRFR(start,end)
+    return rfr + (beta * erp)
 
 # Get Cost of Equity for a stock given historical data
 # of bond yields, erp, and index fund performance

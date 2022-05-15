@@ -5,7 +5,7 @@ from discount import getCOEHistorical, getERP, getCOECurrent
 
 key = ""
 
-with open("key.txt","r") as file:
+with open("alphakey.txt","r") as file:
     key = file.read()
 
 # Return historical FCFEs for a ticker
@@ -73,6 +73,11 @@ def getFCFE(ticker):
             # current working capital - previous working capital
             df["deltaWorkingCapital"][idx] = df["workingCapital"][idx] - df["workingCapital"][idx - 1] 
 
+    # Formula for FCFE:
+    # netIncome + dividend + buybacks
+    # - capEx
+    # - ΔnonCashWorkingCapital
+    # + Δdebt
     df["FCFE"] = df["netIncome"] + df["dividendPayout"] - df["capitalExpenditures"] - df["deltaWorkingCapital"] + df["debtIssued"]
 
     newdf = pd.DataFrame()
@@ -81,10 +86,10 @@ def getFCFE(ticker):
     return newdf
 
 # formula for actually calculating a DCF estimate
+# Σ FCFE/(1+coe) ** n    +     terminalValue
 def getDCF(fcfe,coe,erp,yearsGrowth):
 
     total = 0
-    # print(fcfe,coe,erp)
 
     for i in range(yearsGrowth):
         discount = (1 + coe) ** i
@@ -127,7 +132,7 @@ def getDCFArray(ticker,yearsGrowth):
             print(f"Failed for year {idx}, trying with fresh data")
 
             try:
-                erp = 5.23
+                erp = 5.23 # From Aswath Damodaran website
                 coe = getCOECurrent(ticker,"SPY",start,end,erp)/100.0
                 dcf = getDCF(fcfe,coe,erp,yearsGrowth)
                 dcfData["dcf"][idx] = dcf

@@ -10,7 +10,7 @@ key = ""
 
 # Fetch time-series stock data
 
-with open("key.txt","r") as file:
+with open("alphakey.txt","r") as file:
     key = file.read()
 
 metric = "TIME_SERIES_WEEKLY"
@@ -42,7 +42,6 @@ t = time.time()
 dcfs =  getDCFArray(ticker,5)
 print(f"Elapsed time: {time.time() - t}s")
 print(dcfs)
-
 
 plot = newdf["price"].plot(style="-")
 dcfs['FairValue'].plot(style=".",ax=plot)
