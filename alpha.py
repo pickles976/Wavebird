@@ -47,8 +47,13 @@ def getFCFE(ticker):
         if entry["shortLongTermDebtTotal"] != "None":
             debt = int(entry["shortLongTermDebtTotal"])
 
+        repurchases = 0
+        if entry["proceedsFromRepurchaseOfEquity"] != "None":
+            repurchases = int(entry["proceedsFromRepurchaseOfEquity"])
+
         date = int(entry["fiscalDateEnding"].split("-")[0])
         newEntry = {"netIncome": int(entry["netIncome"]), 
+        "repurchases": repurchases,
         "dividendPayout": divPayout,
         "capitalExpenditures": int(entry["capitalExpenditures"]), 
         "workingCapital": int(entry["totalCurrentAssets"]) - int(entry["totalCurrentLiabilities"]),
@@ -78,7 +83,7 @@ def getFCFE(ticker):
     # - capEx
     # - ΔnonCashWorkingCapital
     # + Δdebt
-    df["FCFE"] = df["netIncome"] + df["dividendPayout"] - df["capitalExpenditures"] - df["deltaWorkingCapital"] + df["debtIssued"]
+    df["FCFE"] = df["netIncome"] + df["dividendPayout"] - df["repurchases"] - df["capitalExpenditures"] - df["deltaWorkingCapital"] + df["debtIssued"]
 
     newdf = pd.DataFrame()
     newdf["FCFE"] = df["FCFE"]
@@ -140,6 +145,7 @@ def getDCFArray(ticker,yearsGrowth):
             except:
                 print("Failed with fresh data")
 
+    # DCF for previous year reporting
     dcfData.index = [f"{i}-04-01" for i in fcfeData.index]
 
     dates = []

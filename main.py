@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as matplt
 import datetime
 
-ticker = "SBUX"
+ticker = "XOM"
 
 key = ""
 
