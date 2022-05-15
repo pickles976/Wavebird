@@ -82,17 +82,17 @@ def getCOECurrent(ticker,indexFund,start,end,erp):
     return rfr + (beta * erp)
 
 # Get Cost of Equity for a stock given historical data
-# of bond yields, erp, and index fund performance
+# of T.Bill yields, erp, and index fund performance
 def getCOEHistorical(ticker,indexFund,start,end):
 
     year = int(start.split("-")[0])
 
     erp = getERP(year)
-
+    
     df = pd.read_csv("HistoricalRates.csv")
 
-    # Get the RFR 10-Y from historical data
-    rfr = df["T.Bond Rate"][df["Year"] == year].values[0]
+    # Get the RFR from historical T.Bill data
+    rfr = df["T.Bill Rate"][df["Year"] == year].values[0]
     rfr = float(rfr.replace("%",""))
 
     # get beta from Yahoo

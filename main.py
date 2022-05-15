@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as matplt
 import datetime
 
-ticker = "XOM"
+ticker = "GOOG"
 
 key = ""
 
