@@ -5,7 +5,6 @@ import time
 
 # Functions used to get the discount rate for FCFE
 # COE aka Cost of Equity
-# ERP: https://pages.stern.nyu.edu/~adamodar/New_Home_Page/home.htm
 
 # get beta for a given stock vs a broader index (SPY/DJIA/NASDAQ)
 # very slow since it is getting both historical stock prices for
