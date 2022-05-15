@@ -45,7 +45,7 @@ print(dcfs)
 
 plot = newdf["price"].plot(style="-")
 dcfs['FairValue'].plot(style=".",ax=plot)
-
+plot.set_title(ticker)
 matplt.style.use("seaborn")
 matplt.show()
 

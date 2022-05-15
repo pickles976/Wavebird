@@ -3,3 +3,4 @@ bs4
 pandas
 html5lib
 pandas_datareader
+matplotlib
