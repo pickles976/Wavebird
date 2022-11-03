@@ -9,5 +9,10 @@ COE = risk-free-rate + (beta * equity-risk-premium)
 Historical Data from:  
 https://pages.stern.nyu.edu/~adamodar/New_Home_Page/home.htm
 
+TODO:
 
-
+- [ ] API caching
+- [ ] Monte Carlo 
+- [ ] Efficient Frontier optimization with GA
+- [ ] Port to Rust
+- [ ] Host as a web application?
