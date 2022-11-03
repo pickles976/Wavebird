@@ -11,6 +11,7 @@ https://pages.stern.nyu.edu/~adamodar/New_Home_Page/home.htm
 
 TODO:
 
+- [ ] Unit testing
 - [ ] API caching
 - [ ] Monte Carlo 
 - [ ] Efficient Frontier optimization with GA
