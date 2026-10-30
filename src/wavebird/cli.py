@@ -13,7 +13,7 @@ from wavebird.cache import SQLiteCache
 from wavebird.config import Settings, load_assumptions
 from wavebird.damodaran import DamodaranClient
 from wavebird.errors import WavebirdError
-from wavebird.plotting import parse_window, plot_report
+from wavebird.plotting import parse_window, write_report_pdf
 from wavebird.reporting import render_json, render_text
 from wavebird.service import AnalysisService
 from wavebird.shiller import ShillerClient
@@ -123,7 +123,12 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--as-of", dest="as_of", default=None, help="valuation date YYYY-MM-DD")
     analyze.add_argument("--refresh", action="store_true", help="bypass fresh cache entries")
     analyze.add_argument("--json", action="store_true", help="emit JSON instead of text")
-    analyze.add_argument("--plot", dest="plot", default=None, help="write the four-panel plot")
+    analyze.add_argument(
+        "--report",
+        dest="report",
+        default=None,
+        help="write the analysis PDF (plain-English summary + plots)",
+    )
     analyze.add_argument(
         "--window",
         dest="window",
@@ -210,13 +215,13 @@ def _run_analyze(args: argparse.Namespace, settings: Settings) -> int:
             print(render_json(report))
         else:
             print(render_text(report))
-        if args.plot is not None:
+        if args.report is not None:
             try:
                 window = parse_window(args.window)
             except ValueError as error:
                 print(str(error), file=sys.stderr)
                 return 2
-            plot_report(report, Path(args.plot), window=window)
+            write_report_pdf(report, Path(args.report), window=window)
     finally:
         runtime.close()
     return 0

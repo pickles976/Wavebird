@@ -34,6 +34,7 @@ class Settings(BaseSettings):
 class ValuationAssumptions(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
+    currency: str = Field(default="USD")
     forecast_years: int = Field(ge=1)
     high_growth_rate: float = Field(gt=-1)
     stable_growth_rate: float = Field(gt=-1)
@@ -50,6 +51,7 @@ class ValuationAssumptions(BaseModel):
 
     @model_validator(mode="after")
     def validate_terminal_returns(self) -> Self:
+        object.__setattr__(self, "currency", self.currency.upper())
         if self.stable_roe <= self.stable_growth_rate:
             raise ValueError("stable_roe must exceed stable_growth_rate")
         if self.stable_roc <= self.stable_growth_rate:

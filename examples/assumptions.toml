@@ -1,5 +1,6 @@
 # Example inputs only — not recommendations.
 # Supply your own thesis; every number here drives real valuations.
+currency = "USD"
 forecast_years = 5
 high_growth_rate = 0.06
 stable_growth_rate = 0.025

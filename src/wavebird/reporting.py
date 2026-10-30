@@ -26,8 +26,29 @@ TRADEOFFS = {
 NON_CAUSAL_SENTENCE = "This shows co-movement, not that debt caused growth."
 
 
-def format_money(value: float | None) -> str:
-    return "N/A" if value is None else f"{value:,.2f}"
+CURRENCY_SYMBOLS = {"USD": "$", "EUR": "\u20ac", "GBP": "\u00a3", "JPY": "\u00a5"}
+
+
+def format_money(value: float | None, currency: str = "USD", decimals: int = 2) -> str:
+    if value is None:
+        return "N/A"
+    code = currency.upper()
+    symbol = CURRENCY_SYMBOLS.get(code, f"{code} ")
+    return f"{symbol}{value:,.{decimals}f}"
+
+
+def format_money_short(value: float | None, currency: str = "USD") -> str:
+    """Abbreviate large amounts for chart axes: $561M, $200.5B, $1.5T."""
+    if value is None:
+        return "N/A"
+    code = currency.upper()
+    symbol = CURRENCY_SYMBOLS.get(code, f"{code} ")
+    for factor, suffix in ((1e12, "T"), (1e9, "B"), (1e6, "M")):
+        if abs(value) >= factor:
+            scaled = value / factor
+            digits = f"{scaled:.1f}".rstrip("0").rstrip(".")
+            return f"{symbol}{digits}{suffix}"
+    return f"{symbol}{value:,.0f}"
 
 
 def format_rate(value: float | None) -> str:
@@ -38,7 +59,7 @@ def format_optional(value: float | str | None) -> str:
     return "N/A" if value is None else str(value)
 
 
-def _comparison_row(point: AnalysisPoint, label: str) -> list[str]:
+def _comparison_row(point: AnalysisPoint, label: str, currency: str = "USD") -> list[str]:
     shares = point.period.shares_outstanding
     cells = [label]
     for model in ModelName:
@@ -62,10 +83,10 @@ def _comparison_row(point: AnalysisPoint, label: str) -> list[str]:
             result.terminal_value_share if result.terminal_value_share is not None else None
         )
         cells.append(
-            f"{MODEL_LABELS[model]}: value/share {format_money(value)}, "
+            f"{MODEL_LABELS[model]}: value/share {format_money(value, currency)}, "
             f"discount {format_rate(discount)}, "
-            f"explicit PV/share {format_money(explicit_ps)}, "
-            f"terminal PV/share {format_money(terminal_ps)}, "
+            f"explicit PV/share {format_money(explicit_ps, currency)}, "
+            f"terminal PV/share {format_money(terminal_ps, currency)}, "
             f"terminal share {format_rate(terminal_share)}"
         )
     return cells
@@ -77,12 +98,13 @@ def render_text(report: AnalysisReport) -> str:
 
     lines.append(f"Wavebird analysis for {report.symbol} (as of {report.as_of.isoformat()})")
     lines.append(f"Screen state: {report.screen_state.value}")
-    lines.append(f"Market price: {format_money(current.market_price)}")
-    lines.append(f"Market capitalization: {format_money(current.market_capitalization)}")
+    currency = report.assumptions.currency
+    lines.append(f"Market price: {format_money(current.market_price, currency)}")
+    lines.append(f"Market capitalization: {format_money(current.market_capitalization, currency)}")
     lines.append("")
 
     lines.append("Model comparison")
-    for row in _comparison_row(current, report.symbol):
+    for row in _comparison_row(current, report.symbol, currency):
         lines.append(f"  {row}")
     lines.append("")
 
@@ -108,7 +130,8 @@ def render_text(report: AnalysisReport) -> str:
     lines.append(f"  capex growth rate: {format_rate(a.capex_growth_rate)}")
     lines.append(f"  depreciation growth rate: {format_rate(a.depreciation_growth_rate)}")
     lines.append(f"  revenue growth rate: {format_rate(a.revenue_growth_rate)}")
-    lines.append(f"  equity option value: {format_money(a.equity_option_value)}")
+    lines.append(f"  currency: {a.currency}")
+    lines.append(f"  equity option value: {format_money(a.equity_option_value, currency)}")
     lines.append("")
 
     lines.append("Sensitivity grids (discount-rate delta vs terminal-growth delta)")
@@ -125,7 +148,7 @@ def render_text(report: AnalysisReport) -> str:
             for rate_delta in sorted({c[0] for c in grid}):
                 cell = grid.get((rate_delta, growth_delta))
                 value = (
-                    format_money(cell.value_per_share)
+                    format_money(cell.value_per_share, currency)
                     if cell is not None and cell.value_per_share is not None
                     else "N/A"
                 )
@@ -141,12 +164,12 @@ def render_text(report: AnalysisReport) -> str:
         lines.append(
             f"  {point.period.period_kind.value} {point.period.fiscal_date.isoformat()}: "
             f"EPS {format_optional(_num(d.get('eps')))}, "
-            f"revenue {format_money(_num(d.get('revenue')))}, "
-            f"EBIT {format_money(_num(d.get('ebit')))}, "
-            f"FCFE {format_money(_num(d.get('actual_fcfe')))}, "
-            f"FCFF {format_money(_num(d.get('actual_fcff')))}, "
-            f"gross debt {format_money(_num(d.get('gross_debt')))}, "
-            f"net debt {format_money(_num(d.get('net_debt')))}, "
+            f"revenue {format_money(_num(d.get('revenue')), currency)}, "
+            f"EBIT {format_money(_num(d.get('ebit')), currency)}, "
+            f"FCFE {format_money(_num(d.get('actual_fcfe')), currency)}, "
+            f"FCFF {format_money(_num(d.get('actual_fcff')), currency)}, "
+            f"gross debt {format_money(_num(d.get('gross_debt')), currency)}, "
+            f"net debt {format_money(_num(d.get('net_debt')), currency)}, "
             f"leverage {format_rate(_num(d.get('debt_to_capital')))}, "
             f"ROE {format_rate(_num(d.get('roe')))}, "
             f"ROC {format_rate(_num(d.get('roc')))}, "

@@ -11,7 +11,7 @@ from wavebird.alpha_vantage import DAILY_REQUEST_LIMIT, SYMBOL_PATTERN
 from wavebird.config import ValuationAssumptions
 from wavebird.errors import WavebirdError
 from wavebird.models import AnalysisReport
-from wavebird.plotting import parse_window, plot_report
+from wavebird.plotting import parse_window, write_report_pdf
 from wavebird.reporting import render_json, render_text
 
 DEFAULT_ASSUMPTIONS_PATH = Path("examples/assumptions.toml")
@@ -280,7 +280,7 @@ def run_interactive(
     report: AnalysisReport = service.analyze(symbol, assumptions, as_of, refresh=refresh_default)
     ui.notify(render_text(report))
 
-    if yes_no(ui, "Save plot?", default=False):
+    if yes_no(ui, "Save PDF report?", default=False):
         window: Any = None
         while True:
             raw = ui.prompt("Plot window 52w/3y/5y/10y (blank = all history)", default="")
@@ -289,9 +289,9 @@ def run_interactive(
                 break
             except ValueError as error:
                 ui.notify(str(error))
-        path = ui.prompt("Plot path", default=f"{symbol}.png")
-        plot_report(report, Path(path), window=window)
-        ui.notify(f"Plot written to {path}")
+        path = ui.prompt("Report path", default=f"{symbol}.pdf")
+        write_report_pdf(report, Path(path), window=window)
+        ui.notify(f"Report written to {path}")
     if yes_no(ui, "Save JSON report?", default=False):
         path = ui.prompt("JSON path", default=f"{symbol}.json")
         Path(path).write_text(render_json(report))

@@ -45,3 +45,14 @@ def test_settings_default_cache_uses_xdg(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("XDG_CACHE_HOME", "/tmp/xdg")
     settings = Settings(alpha_vantage_api_key=None)
     assert settings.cache_path == Path("/tmp/xdg/wavebird/cache.sqlite3")
+
+
+def test_currency_defaults_to_usd_and_normalizes(assumptions) -> None:
+    assert assumptions.currency == "USD"
+
+    from wavebird.config import ValuationAssumptions
+
+    values = assumptions.model_dump()
+    values["currency"] = "eur"
+    localized = ValuationAssumptions(**values)
+    assert localized.currency == "EUR"

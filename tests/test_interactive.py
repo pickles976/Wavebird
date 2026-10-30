@@ -106,11 +106,11 @@ def test_distinct_symbols_from_cache(tmp_path) -> None:
 
 def test_yes_no_parses_and_reprompts() -> None:
     ui = FakeUI(prompts=["banana", "n"])
-    assert yes_no(ui, "Save plot?", default=True) is False
+    assert yes_no(ui, "Save PDF report?", default=True) is False
     ui = FakeUI(prompts=["y"])
-    assert yes_no(ui, "Save plot?", default=False) is True
+    assert yes_no(ui, "Save PDF report?", default=False) is True
     ui = FakeUI(prompts=[""])
-    assert yes_no(ui, "Save plot?", default=True) is True
+    assert yes_no(ui, "Save PDF report?", default=True) is True
 
 
 def test_menu_puts_run_first() -> None:
@@ -210,7 +210,7 @@ def test_run_interactive_full_flow(tmp_path, monkeypatch) -> None:
             "acme",  # ticker
             "y",  # save plot?
             "",  # plot window (blank = all)
-            "",  # plot path (default acme.png)
+            "",  # report path (default acme.pdf)
             "y",  # save json?
             "",  # json path (default acme.json)
         ],
@@ -225,7 +225,7 @@ def test_run_interactive_full_flow(tmp_path, monkeypatch) -> None:
         open_editor=True,
     )
     assert code == 0
-    assert (tmp_path / "ACME.png").stat().st_size > 0
+    assert (tmp_path / "ACME.pdf").stat().st_size > 0
     assert (tmp_path / "ACME.json").exists()
     joined = "\n".join(ui.notifications)
     assert "Wavebird analysis for ACME" in joined
@@ -294,5 +294,5 @@ def test_prompt_without_completer_is_stateless(monkeypatch) -> None:
         interactive, "tk_prompt", lambda text, default=None, **kwargs: seen.update(text=text)
     )
     ui = interactive.PromptToolkitUI()
-    ui.prompt("Save plot?", default="x")
-    assert "Save plot?" in seen["text"]
+    ui.prompt("Save PDF report?", default="x")
+    assert "Save PDF report?" in seen["text"]

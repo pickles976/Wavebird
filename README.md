@@ -1,8 +1,12 @@
 # Wavebird
 
+https://github.com/OWNER/REPOSITORY/actions/workflows/ci/badge.svg
+
 Comparative DCF analysis tool. Uses AlphaVantage API. DCF analysis formulas from [Aswath Damodaran's website](https://pages.stern.nyu.edu/~adamodar/) and The Little Book of Valuation. AlphaVantage limits to 25 API calls a day on free tier. Calls are cached in SQLite db. 
 
 ![](./GOOG.png)
+
+Check out the example PDF in this repo.
 
 ## Requirements
 
@@ -53,7 +57,6 @@ uv run wavebird # --edit-assumptions to change variables
   operating/capital-structure cross-check and is preferable when borrowing distorts
   equity cash flow; it adds WACC, target-debt, tax, cash/debt, and option-value
   assumptions.
-
 
 ## Assumptions file
 

@@ -140,3 +140,33 @@ def test_json_includes_sensitivity_and_warnings(analysis_report) -> None:
     assert parsed_date in rendered
     assert isinstance(AnalysisReport, type)
     assert date(2026, 2, 1) == analysis_report.as_of
+
+
+def test_format_money_includes_currency_symbol() -> None:
+    from wavebird.reporting import format_money
+
+    assert format_money(1_000_000.0) == "$1,000,000.00"
+    assert format_money(1234.5, currency="EUR") == "\u20ac1,234.50"
+    assert format_money(None) == "N/A"
+
+
+def test_render_text_formats_money_with_currency(analysis_report) -> None:
+    import re
+
+    from wavebird.reporting import render_text
+
+    text = render_text(analysis_report)
+    assert "Market price: $" in text
+    assert re.search(r"\$[\d,]+\.\d{2}", text)
+    assert "currency: USD" in text
+
+
+def test_format_money_short_abbreviates_large_amounts() -> None:
+    from wavebird.reporting import format_money_short
+
+    assert format_money_short(561_000_000.0) == "$561M"
+    assert format_money_short(200_500_000_000.0) == "$200.5B"
+    assert format_money_short(1_500_000_000_000.0) == "$1.5T"
+    assert format_money_short(50_000_000.0) == "$50M"
+    assert format_money_short(402.0) == "$402"
+    assert format_money_short(-3_000_000_000.0, currency="EUR") == "\u20ac-3B"

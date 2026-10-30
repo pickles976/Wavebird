@@ -116,8 +116,8 @@ def test_analyze_writes_plot(monkeypatch, tmp_path: Path, capsys) -> None:
     runtime = FakeRuntime()
     monkeypatch.setattr("wavebird.cli.build_runtime", lambda settings: runtime)
     path = write_assumptions(tmp_path)
-    plot = tmp_path / "out" / "aapl.png"
-    code = main(["analyze", "AAPL", "--assumptions", str(path), "--plot", str(plot)])
+    plot = tmp_path / "out" / "aapl.pdf"
+    code = main(["analyze", "AAPL", "--assumptions", str(path), "--report", str(plot)])
     assert code == 0
     assert plot.stat().st_size > 0
 
@@ -257,12 +257,12 @@ def test_analyze_window_flag_reaches_plot(monkeypatch, tmp_path) -> None:
     import wavebird.cli as cli_module
     from wavebird.service import AnalysisService
 
-    def fake_plot_report(report, destination, window=None):
+    def fake_write_report_pdf(report, destination, window=None):
         seen["window"] = window
-        destination.write_bytes(b"png")
+        destination.write_bytes(b"%PDF")
         return destination
 
-    monkeypatch.setattr(cli_module, "plot_report", fake_plot_report)
+    monkeypatch.setattr(cli_module, "write_report_pdf", fake_write_report_pdf)
     monkeypatch.setattr(
         "wavebird.cli.build_runtime",
         lambda settings: FakeRuntime(
@@ -290,8 +290,8 @@ def test_analyze_window_flag_reaches_plot(monkeypatch, tmp_path) -> None:
             "acme",
             "--assumptions",
             str(assumptions),
-            "--plot",
-            str(tmp_path / "out.png"),
+            "--report",
+            str(tmp_path / "out.pdf"),
             "--window",
             "3y",
         ]

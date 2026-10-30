@@ -1,9 +1,17 @@
+import re
 from pathlib import Path
 
 import numpy as np
 
 from wavebird.models import ModelName, ModelResult, ShillerPoint
-from wavebird.plotting import build_figure, filter_report_window, parse_window, plot_report
+from wavebird.plotting import (
+    MODEL_LABELS,
+    build_figure,
+    build_summary_figure,
+    filter_report_window,
+    parse_window,
+    write_report_pdf,
+)
 
 DCF_LABELS = {
     f"{label} ({suffix})"
@@ -18,7 +26,9 @@ def line_labels(figure) -> set[str]:
 
 def test_plot_has_six_named_panels_in_order(analysis_report) -> None:
     figure = build_figure(analysis_report)
-    assert [axis.get_title() for axis in figure.axes] == [
+    titles = [axis.get_title() for axis in figure.axes]
+    assert titles == [
+        "",  # thesis summary header axis
         "Share price vs fair value per share",
         "Market capitalization vs intrinsic equity value",
         "Shiller PE (market)",
@@ -28,10 +38,26 @@ def test_plot_has_six_named_panels_in_order(analysis_report) -> None:
     ]
 
 
-def test_plot_writes_png(tmp_path: Path, analysis_report) -> None:
-    target = tmp_path / "report.png"
-    assert plot_report(analysis_report, target) == target
-    assert target.stat().st_size > 0
+def test_report_pdf_has_summary_and_plot_pages(
+    monkeypatch, tmp_path: Path, analysis_report
+) -> None:
+    from matplotlib.backends.backend_pdf import PdfPages
+
+    pages: list[int] = []
+    real_savefig = PdfPages.savefig
+
+    def counting_savefig(self, figure, *args, **kwargs):
+        pages.append(len(figure.axes))
+        return real_savefig(self, figure, *args, **kwargs)
+
+    monkeypatch.setattr(PdfPages, "savefig", counting_savefig)
+    target = tmp_path / "report.pdf"
+    assert write_report_pdf(analysis_report, target) == target
+    assert target.read_bytes()[:4] == b"%PDF"
+    # Page 1: the plain-English summary; page 2: the full figure.
+    assert len(pages) == 2
+    assert pages[0] == 1
+    assert pages[1] == 7
 
 
 def test_all_six_dcf_series_are_labeled(analysis_report) -> None:
@@ -91,16 +117,16 @@ def test_filter_report_window_drops_old_points(analysis_report) -> None:
     assert filtered.symbol == analysis_report.symbol
 
 
-def test_plot_report_accepts_window(tmp_path: Path, analysis_report) -> None:
+def test_report_pdf_accepts_window(tmp_path: Path, analysis_report) -> None:
     from datetime import timedelta
 
-    path = plot_report(analysis_report, tmp_path / "w.png", window=timedelta(days=365))
+    path = write_report_pdf(analysis_report, tmp_path / "w.pdf", window=timedelta(days=365))
     assert path.stat().st_size > 0
 
 
 def test_price_panel_plots_price_and_fair_value(analysis_report) -> None:
     figure = build_figure(analysis_report)
-    price_axis = figure.axes[0]
+    price_axis = figure.axes[1]
     labels = [str(line.get_label()) for line in price_axis.get_lines()]
     assert any("Share price" in label for label in labels)
     assert any("fair value" in label for label in labels)
@@ -119,7 +145,7 @@ def test_shiller_panel_plots_series(analysis_report) -> None:
         }
     )
     figure = build_figure(decorated)
-    shiller_axis = figure.axes[2]
+    shiller_axis = figure.axes[3]
     lines = shiller_axis.get_lines()
     assert len(lines) == 1
     assert "Shiller PE" in str(lines[0].get_label())
@@ -151,6 +177,90 @@ def test_shiller_axis_has_independent_x_range(analysis_report) -> None:
         }
     )
     figure = build_figure(decorated)
-    price_axis = figure.axes[0]
-    shiller_axis = figure.axes[2]
+    price_axis = figure.axes[1]
+    shiller_axis = figure.axes[3]
     assert price_axis.get_xlim() != shiller_axis.get_xlim()
+
+
+def _header_text(figure):
+    header_axis = figure.axes[0]
+    return "\n".join(text.get_text() for text in header_axis.texts)
+
+
+def test_summary_header_shows_fair_value_price_and_mos(analysis_report) -> None:
+    figure = build_figure(analysis_report)
+    header = _header_text(figure)
+    assert analysis_report.symbol in header
+    assert str(analysis_report.screen_state.value) in header
+    assert f"{analysis_report.current.market_price:,.2f}" in header
+    assert f"{analysis_report.assumptions.margin_of_safety:.0%}" in header
+    for model in ModelName:
+        result = next(r for r in analysis_report.current.models if r.model is model)
+        assert MODEL_LABELS[model] in header
+        assert f"{result.value_per_share:,.2f}" in header
+        assert f"{result.discount_to_value:+.1%}" in header
+
+
+def test_summary_header_marks_unavailable_model(analysis_report) -> None:
+    from wavebird.models import ModelResult
+
+    broken = ModelResult(model=ModelName.STABLE_FCFE, unavailable_reason="negative EPS")
+    points = analysis_report.current.models
+    rebuilt_current = analysis_report.current.model_copy(
+        update={"models": tuple(broken if r.model is ModelName.STABLE_FCFE else r for r in points)}
+    )
+    decorated = analysis_report.model_copy(update={"current": rebuilt_current})
+    figure = build_figure(decorated)
+    header = _header_text(figure)
+    assert MODEL_LABELS[ModelName.STABLE_FCFE] in header
+    assert "unavailable" in header
+    assert "negative EPS" in header
+
+
+def test_currency_axes_use_dollar_ticks_no_offset(analysis_report) -> None:
+    from wavebird.models import MarketCapPoint
+
+    scaled = analysis_report.model_copy(
+        update={
+            "weekly_market_cap": tuple(
+                MarketCapPoint(
+                    date=point.date,
+                    market_price=point.market_price,
+                    market_capitalization=point.market_capitalization * 1_000_000,
+                )
+                for point in analysis_report.weekly_market_cap
+            )
+        }
+    )
+    figure = build_figure(scaled)
+    figure.canvas.draw()
+    market_axis = figure.axes[2]  # summary, price, market
+    assert market_axis.yaxis.get_offset_text().get_text() == ""
+    labels = [t.get_text() for t in market_axis.get_yticklabels()]
+    assert any(re.fullmatch(r"\$[\d.]+[TBM]", label) for label in labels if label)
+    price_axis = figure.axes[1]
+    price_labels = [t.get_text() for t in price_axis.get_yticklabels()]
+    assert any(label.startswith("$") for label in price_labels if label)
+
+
+def test_summary_figure_is_plain_english_table(analysis_report) -> None:
+    figure = build_summary_figure(analysis_report)
+    raw = "\n".join(text.get_text() for axis in figure.axes for text in axis.texts)
+    text = " ".join(raw.split())
+    assert "one share is worth" in text
+    assert "pay at most" in text
+    assert analysis_report.symbol in text
+    assert MODEL_LABELS[ModelName.STABLE_FCFE] in text
+    assert figure.axes[0].tables, "summary page must contain a table"
+
+
+def test_summary_figure_caps_warning_wall(analysis_report) -> None:
+    decorated = analysis_report.model_copy(
+        update={"warnings": tuple(f"warning {index}" for index in range(1, 6))}
+    )
+    figure = build_summary_figure(decorated)
+    raw = "\n".join(text.get_text() for axis in figure.axes for text in axis.texts)
+    text = " ".join(raw.split())
+    assert "warning 1; warning 2; warning 3" in text
+    assert "+ 2 more data-completeness notices" in text
+    assert "warning 4" not in text
