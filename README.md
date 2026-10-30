@@ -1,6 +1,6 @@
 # Wavebird
 
-https://github.com/pickles976/Wavebird/actions/workflows/ci/badge.svg
+![Tests](https://github.com/pickles976/Wavebird/actions/workflows/ci/badge.svg)
 
 Comparative DCF analysis tool. Uses AlphaVantage API. DCF analysis formulas from [Aswath Damodaran's website](https://pages.stern.nyu.edu/~adamodar/) and The Little Book of Valuation. AlphaVantage limits to 25 API calls a day on free tier. Calls are cached in SQLite db. 
 
