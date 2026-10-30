@@ -49,11 +49,12 @@ Alpha Vantage remains operational. Its live demo endpoints returned current cash
 - `INCOME_STATEMENT`
 - `CASH_FLOW`
 - `BALANCE_SHEET`
+- `EARNINGS`
 - `TIME_SERIES_WEEKLY_ADJUSTED` for the company and SPY
 
-The three statement endpoints return both `annualReports` and `quarterlyReports`; quarterly analysis therefore does not consume extra requests.
+The three statement endpoints return both `annualReports` and `quarterlyReports`; quarterly statements therefore do not consume extra requests. `EARNINGS` supplies annual/quarterly reported EPS and quarterly earnings-release dates.
 
-A normal free key currently permits 25 requests per day. A cold first analysis requires four company requests plus a shared SPY request, so cache-first behavior is mandatory. Alpha Vantage states that verified open-source or educational projects may request unlimited access. The repository's previous key cannot be tested because `alphakey.txt` is absent.
+A normal free key currently permits 25 requests per day. A cold first analysis requires five company requests plus a shared SPY request, so cache-first behavior is mandatory. Alpha Vantage states that verified open-source or educational projects may request unlimited access. The repository's previous key cannot be tested because `alphakey.txt` is absent.
 
 The third-party `alpha-vantage` package does not declare modern-Python compatibility and is unnecessary. Wavebird will use a small `httpx.Client` wrapper with explicit timeouts and Pydantic response validation. The key comes only from `ALPHAVANTAGE_API_KEY` and is never logged or stored in SQLite.
 
@@ -157,9 +158,10 @@ Reports from different endpoints are joined by `fiscalDateEnding`, never by arra
 - current assets, cash and short-term investments, current liabilities, and current interest-bearing debt;
 - total interest-bearing debt and book equity;
 - dividends;
-- diluted average shares and current shares outstanding.
+- annual and quarterly reported EPS and earnings-release date;
+- current shares outstanding.
 
-Only USD records are accepted in this version. Capital expenditure and depreciation are normalized as positive amounts according to the provider field contract. Per-share calculations use diluted shares. Market capitalization uses the raw contemporaneous close and the closest statement's shares outstanding; adjusted close remains the return-series input.
+Only USD records are accepted in this version. Capital expenditure and depreciation are normalized as positive amounts according to the provider field contract. Stable FCFE starts from Alpha Vantage `reportedEPS`. Other per-share inputs and FCFF equity value use the matching balance-sheet `commonStockSharesOutstanding`; the report labels this as a basic, point-in-time denominator rather than a diluted weighted-average count. Market capitalization uses the raw contemporaneous close and that shares-outstanding observation; adjusted close remains the return-series input.
 
 Non-cash working capital is:
 
@@ -202,10 +204,10 @@ The effective tax rate for FCFF defaults to the median of up to three most recen
 Annual DCF points use one annual record and its preceding annual balance-sheet record. Quarterly points use trailing-twelve-month values, never a single quarter multiplied by four:
 
 - TTM revenue, EBIT, pretax income, tax expense, interest, net income, CapEx, and depreciation are sums of the latest four quarters.
+- TTM reported EPS is the sum of the latest four quarterly `reportedEPS` values; annual reported EPS comes from `annualEarnings`.
 - TTM change in NWC equals current quarter-end NWC minus NWC four quarters earlier.
 - Cash, debt, book equity, current liabilities/assets, and shares outstanding are point-in-time values from the current quarter.
-- TTM diluted shares use the weighted average of the four quarterly diluted-share observations, weighted by quarter duration when durations are available and otherwise by equal quarter weights.
-- A quarterly value is unavailable until four contiguous quarters and the prior-year balance-sheet quarter exist.
+- A quarterly value is unavailable until four contiguous statement quarters, four matching EPS quarters, and the prior-year balance-sheet quarter exist.
 
 Annual and quarterly series are distinct result records. They are not mixed when calculating growth rates.
 
@@ -258,7 +260,7 @@ $$
 k_e=r_f+\beta\times ERP
 $$
 
-For current analysis, Wavebird selects the latest Damodaran long-term Treasury rate and implied ERP available at or before `--as-of` or today's date. For each historical point, it selects the latest values available at or before that point's proxy filing date. Monthly observations are preferred where the monthly workbook has coverage; the annual workbook is the dated fallback for older points. The long-term Treasury rate is used consistently; the old T-bill/10-year mixture is removed.
+For current analysis, Wavebird selects the latest Damodaran long-term Treasury rate and implied ERP available at or before `--as-of` or today's date. For each historical point, it selects the latest values available at or before that point's earnings-release or fallback availability date. Monthly observations are preferred where the monthly workbook has coverage; the annual workbook is the dated fallback for older points. The long-term Treasury rate is used consistently; the old T-bill/10-year mixture is removed.
 
 ## Model A: Stable-growth FCFE
 
@@ -276,7 +278,7 @@ $$
 V_0=\frac{FCFE_1}{k_e-g}
 $$
 
-For the current and quarterly models, $EPS_0$ is TTM net income divided by TTM diluted shares. For an annual historical point, it is annual net income divided by annual diluted shares. Preconditions include positive base-period earnings, `stable_roe > stable_growth_rate`, and `cost_of_equity > stable_growth_rate`.
+For the current and quarterly models, $EPS_0$ is the sum of the latest four quarterly Alpha Vantage `reportedEPS` observations. For an annual historical point, it is the matching `annualEarnings.reportedEPS`. Preconditions include positive base-period earnings, `stable_roe > stable_growth_rate`, and `cost_of_equity > stable_growth_rate`.
 
 ## Model B: Two-stage FCFE
 
@@ -288,7 +290,7 @@ $$
 EPS_t=EPS_0(1+g_{EPS})^t
 $$
 
-Capital expenditure, depreciation, and revenue use their configured rates. When no override is present, each equals `high_growth_rate` and the report states that choice. FCFE is calculated consistently per share: base-period CapEx, depreciation, revenue, and NWC are each divided by the same base-period diluted-share count before projection.
+Capital expenditure, depreciation, and revenue use their configured rates. When no override is present, each equals `high_growth_rate` and the report states that choice. FCFE is calculated consistently per share: base-period CapEx, depreciation, revenue, and NWC are each divided by the matching point-in-time shares-outstanding count before projection. The report labels the count as basic shares; it does not call the result diluted EPS.
 
 $$
 RevenuePS_t=RevenuePS_0(1+g_{Revenue})^t
@@ -381,7 +383,7 @@ EquityValue=EnterpriseValue+Cash-Debt-EquityOptionValue
 $$
 
 $$
-ValuePerShare=\frac{EquityValue}{DilutedShares}
+ValuePerShare=\frac{EquityValue}{SharesOutstanding}
 $$
 
 The report distinguishes book-debt and option-value proxies from market values. An omitted option value is displayed as `not supplied; treated as zero`, not hidden.
@@ -428,15 +430,15 @@ Interpretation text explains:
 
 `--plot PATH` writes one four-panel figure with a shared time axis:
 
-1. **Market capitalization versus intrinsic equity value.** Raw weekly close multiplied by the latest shares-outstanding observation available by the proxy filing date forms market capitalization. Stable and two-stage FCFE per-share values are multiplied by that same shares-outstanding observation for plotting; FCFF uses its calculated total equity value. Annual and quarterly values from all three DCF models are separate labeled series. Missing model points remain gaps; they are not interpolated.
+1. **Market capitalization versus intrinsic equity value.** Raw weekly close multiplied by the latest shares-outstanding observation available by the earnings-release or fallback availability date forms market capitalization. Stable and two-stage FCFE per-share values are multiplied by that same shares-outstanding observation for plotting; FCFF uses its calculated total equity value. Annual and quarterly values from all three DCF models are separate labeled series. Missing model points remain gaps; they are not interpolated.
 2. **Operating growth.** Revenue, EBIT/NOPAT, and FCFF are plotted as trailing-twelve-month values for quarterly points and annual values for annual points. A secondary indexed-to-100 view is not mixed into the same axes; the report table supplies percentage growth rates.
 3. **Capital structure.** Gross interest-bearing debt, cash and short-term investments, and net debt are plotted in currency units.
 4. **Debt versus operating growth.** Year-over-year revenue growth, EBIT growth, FCFF growth, net-debt growth, and debt-to-capital are plotted as rates. When prior-period net debt is zero or negative, net-debt growth is undefined: Wavebird shows the absolute change and omits the rate and indicator for that point. Otherwise, text uses `financing-assisted growth indicator` when net debt grows faster than both revenue and EBIT while leverage rises. This panel identifies co-movement only and explicitly states that the indicator is not causal evidence.
 
-Annual points use fiscal year-end plus 90 days as the filing-date proxy. Quarterly points use fiscal quarter-end plus 45 days. Alpha Vantage does not provide original filing dates, and provider history can include later restatements. The figure and CLI state that this is an analytical reconstruction, not a look-ahead-free backtest.
+Quarterly `EARNINGS.reportedDate` is the preferred availability date. The matching fourth-quarter date is also used for an annual point. If it is absent, annual points use fiscal year-end plus 90 days and quarterly points use fiscal quarter-end plus 45 days as explicit fallback proxies. These are earnings-release or proxy dates, not original SEC filing dates, and provider history can include later restatements. The figure and CLI state that this is an analytical reconstruction, not a look-ahead-free backtest.
 Every historical point uses the same user-supplied forward assumptions so the time series measures changing fundamentals, rates, beta, and market capitalization rather than silently changing the valuation thesis.
 
-Plot tests assert the number of panels, line labels, gap behavior, annual/quarterly proxy dates, and successful file creation. They do not use image-pixel snapshots.
+Plot tests assert the number of panels, line labels, gap behavior, earnings-release/fallback dates, and successful file creation. They do not use image-pixel snapshots.
 
 ## Error Handling
 
