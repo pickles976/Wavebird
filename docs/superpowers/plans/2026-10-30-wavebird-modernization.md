@@ -236,9 +236,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_prefix="WAVEBIRD_", extra="forbid", populate_by_name=True
-    )
+    model_config = SettingsConfigDict(env_prefix="WAVEBIRD_", extra="forbid", populate_by_name=True)
 
     alpha_vantage_api_key: SecretStr | None = Field(
         default=None, validation_alias="ALPHAVANTAGE_API_KEY"
@@ -250,9 +248,13 @@ class Settings(BaseSettings):
     damodaran_monthly_url: HttpUrl = HttpUrl(
         "https://pages.stern.nyu.edu/~adamodar/pc/implprem/ERPbymonth.xlsx"
     )
-    cache_path: Path = Field(default_factory=lambda: Path(
-        os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")
-    ) / "wavebird" / "cache.sqlite3")
+    cache_path: Path = Field(
+        default_factory=lambda: (
+            Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+            / "wavebird"
+            / "cache.sqlite3"
+        )
+    )
 
 
 class ValuationAssumptions(BaseModel):
@@ -736,6 +738,7 @@ CREATE TABLE IF NOT EXISTS cache_entries (
 ) WITHOUT ROWID;
 """
 
+
 class CacheKey(NamedTuple):
     provider: str
     dataset: str
@@ -1148,20 +1151,25 @@ from wavebird.valuation import calculate_stable_fcfe
 def test_stable_fcfe_matches_damodaran_fcfest(make_period) -> None:
     period = make_period(reported_eps=5.45, shares_outstanding=1.0)
     market = MarketInputs(
-        as_of=date(2025, 12, 31), beta=1.1, risk_free_rate=0.07,
+        as_of=date(2025, 12, 31),
+        beta=1.1,
+        risk_free_rate=0.07,
         equity_risk_premium=0.055,
     )
     assumptions = ValuationAssumptions(
-        forecast_years=5, high_growth_rate=0.06, stable_growth_rate=0.06,
-        stable_roe=0.12, stable_roc=0.12, stable_beta=1.1,
-        pretax_cost_of_debt=0.05, target_debt_weight=0.0,
+        forecast_years=5,
+        high_growth_rate=0.06,
+        stable_growth_rate=0.06,
+        stable_roe=0.12,
+        stable_roc=0.12,
+        stable_beta=1.1,
+        pretax_cost_of_debt=0.05,
+        target_debt_weight=0.0,
         margin_of_safety=0.25,
     )
     result = calculate_stable_fcfe(period, market, assumptions)
     assert result.assumptions["cost_of_equity"] == pytest.approx(0.1305)
-    assert result.value_per_share == pytest.approx(
-        40.9716312056738, rel=1e-10, abs=1e-8
-    )
+    assert result.value_per_share == pytest.approx(40.9716312056738, rel=1e-10, abs=1e-8)
 ```
 
 Add guard tests for missing EPS, non-positive EPS, non-positive shares, non-finite beta, and `cost_of_equity <= stable_growth_rate`.
@@ -1187,7 +1195,9 @@ def calculate_stable_fcfe(
     market: MarketInputs,
     assumptions: ValuationAssumptions,
 ) -> ModelResult:
-    eps, shares = require_fields(period, ModelName.STABLE_FCFE, "reported_eps", "shares_outstanding")
+    eps, shares = require_fields(
+        period, ModelName.STABLE_FCFE, "reported_eps", "shares_outstanding"
+    )
     if eps <= 0 or shares <= 0:
         raise ValuationMathError("stable FCFE requires positive EPS and shares")
     ke = cost_of_equity(market.beta, market.risk_free_rate, market.equity_risk_premium)
@@ -1202,8 +1212,11 @@ def calculate_stable_fcfe(
         shares=shares,
         explicit_stage_pv=0.0,
         terminal_value_pv=value * shares,
-        assumptions={"cost_of_equity": ke, "stable_growth_rate": growth,
-                     "stable_roe": assumptions.stable_roe},
+        assumptions={
+            "cost_of_equity": ke,
+            "stable_growth_rate": growth,
+            "stable_roe": assumptions.stable_roe,
+        },
     )
 ```
 
@@ -1221,8 +1234,7 @@ def require_fields(
     if missing:
         fields = ", ".join(missing)
         raise DataUnavailableError(
-            f"{model.value} unavailable for {period.symbol} "
-            f"{period.fiscal_date}: missing {fields}"
+            f"{model.value} unavailable for {period.symbol} {period.fiscal_date}: missing {fields}"
         )
     return tuple(float(getattr(period, name)) for name in names)
 
@@ -1299,8 +1311,10 @@ def test_two_stage_fcfe_matches_damodaran_workbook(make_period) -> None:
         shares_outstanding=1.0,
     )
     market = MarketInputs(
-        as_of=date(2025, 12, 31), beta=1.3,
-        risk_free_rate=0.07, equity_risk_premium=0.055,
+        as_of=date(2025, 12, 31),
+        beta=1.3,
+        risk_free_rate=0.07,
+        equity_risk_premium=0.055,
     )
     assumptions = ValuationAssumptions(
         forecast_years=5,
@@ -1317,10 +1331,17 @@ def test_two_stage_fcfe_matches_damodaran_workbook(make_period) -> None:
         revenue_growth_rate=0.18,
     )
     result = calculate_two_stage_fcfe(period, market, assumptions)
-    assert [p.cash_flow for p in result.projections] == pytest.approx([
-        1.44934531768689, 1.89792749443693, 2.47104150291537,
-        3.20127887639708, 4.12945483295115,
-    ], rel=1e-10, abs=1e-8)
+    assert [p.cash_flow for p in result.projections] == pytest.approx(
+        [
+            1.44934531768689,
+            1.89792749443693,
+            2.47104150291537,
+            3.20127887639708,
+            4.12945483295115,
+        ],
+        rel=1e-10,
+        abs=1e-8,
+    )
     assert result.assumptions["terminal_cash_flow"] == pytest.approx(5.89724099266713)
     assert result.explicit_stage_pv == pytest.approx(8.40368507114114)
     assert result.terminal_value_pv == pytest.approx(43.1598751388765)
@@ -1395,14 +1416,21 @@ git commit -m "feat: implement two stage FCFE"
 ```python
 def test_two_stage_fcff_matches_damodaran_workbook(make_period) -> None:
     period = make_period(
-        ebit=5186.0, capex=2152.0, depreciation=1228.0,
-        revenue=16701.0, nwc=3755.0, delta_nwc=499.0,
-        cash=500.0, total_debt=1822.0,
+        ebit=5186.0,
+        capex=2152.0,
+        depreciation=1228.0,
+        revenue=16701.0,
+        nwc=3755.0,
+        delta_nwc=499.0,
+        cash=500.0,
+        total_debt=1822.0,
         shares_outstanding=993.57,
     )
     market = MarketInputs(
-        as_of=date(2025, 12, 31), beta=0.8,
-        risk_free_rate=0.053, equity_risk_premium=0.055,
+        as_of=date(2025, 12, 31),
+        beta=0.8,
+        risk_free_rate=0.053,
+        equity_risk_premium=0.055,
     )
     assumptions = ValuationAssumptions(
         forecast_years=5,
@@ -1418,10 +1446,17 @@ def test_two_stage_fcff_matches_damodaran_workbook(make_period) -> None:
     )
     result = calculate_two_stage_fcff(period, market, assumptions, tax_rate=0.2849)
     assert result.assumptions["high_stage_wacc"] == pytest.approx(0.0961694755567984)
-    assert [p.cash_flow for p in result.projections] == pytest.approx([
-        2681.99139547176, 2965.30174776604, 3278.53939805712,
-        3624.86569628555, 4007.77593946084,
-    ], rel=1e-10, abs=1e-8)
+    assert [p.cash_flow for p in result.projections] == pytest.approx(
+        [
+            2681.99139547176,
+            2965.30174776604,
+            3278.53939805712,
+            3624.86569628555,
+            4007.77593946084,
+        ],
+        rel=1e-10,
+        abs=1e-8,
+    )
     assert result.assumptions["terminal_cash_flow"] == pytest.approx(3247.37712358278)
     assert result.assumptions["enterprise_value"] == pytest.approx(69175.1523336163)
     assert result.value_per_share == pytest.approx(66.7825642215609)

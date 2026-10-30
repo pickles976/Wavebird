@@ -1,0 +1,11 @@
+# Example inputs only — not recommendations.
+# Supply your own thesis; every number here drives real valuations.
+forecast_years = 5
+high_growth_rate = 0.06
+stable_growth_rate = 0.025
+stable_roe = 0.12
+stable_roc = 0.10
+stable_beta = 1.0
+pretax_cost_of_debt = 0.05
+target_debt_weight = 0.20
+margin_of_safety = 0.25
